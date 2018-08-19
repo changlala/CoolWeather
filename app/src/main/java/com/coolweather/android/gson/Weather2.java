@@ -26,7 +26,76 @@ public class Weather2 {
         @SerializedName("tmp_min")
         private String tmpMin;
 
+        public String getDescribeD() {
+            return describeD;
+        }
+
+        public void setDescribeD(String describeD) {
+            this.describeD = describeD;
+        }
+
+        public String getDescribeN() {
+            return describeN;
+        }
+
+        public void setDescribeN(String describeN) {
+            this.describeN = describeN;
+        }
+
+        public String getDate() {
+            return date;
+        }
+
+        public void setDate(String date) {
+            this.date = date;
+        }
+
+        public String getTmpMax() {
+            return tmpMax;
+        }
+
+        public void setTmpMax(String tmpMax) {
+            this.tmpMax = tmpMax;
+        }
+
+        public String getTmpMin() {
+            return tmpMin;
+        }
+
+        public void setTmpMin(String tmpMin) {
+            this.tmpMin = tmpMin;
+        }
     }
 
+    public Basic getBasic() {
+        return basic;
+    }
 
+    public void setBasic(Basic basic) {
+        this.basic = basic;
+    }
+
+    public List<ForeCast> getForecasts() {
+        return forecasts;
+    }
+
+    public void setForecasts(List<ForeCast> forecasts) {
+        this.forecasts = forecasts;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public Update getUpdate() {
+        return update;
+    }
+
+    public void setUpdate(Update update) {
+        this.update = update;
+    }
 }

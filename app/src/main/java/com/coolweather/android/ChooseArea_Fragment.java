@@ -2,6 +2,7 @@ package com.coolweather.android;
 
 
 import android.app.ProgressDialog;
+import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -86,7 +87,10 @@ public class ChooseArea_Fragment extends Fragment {
                         showCounties();
                         break;
                     case COUNTY:
-
+                        Intent intent = new Intent(getContext(),WeatherActivity.class);
+                        County county = LitePal.where("name=?",dataList.get(position)).find(County.class).get(0);
+                        intent.putExtra("weatherId",county.getWeatherId());
+                        startActivity(intent);
                         break;
 
                 }
