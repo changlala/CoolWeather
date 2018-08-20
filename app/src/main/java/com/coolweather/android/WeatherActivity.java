@@ -1,18 +1,23 @@
 package com.coolweather.android;
 
+import android.app.ActionBar;
 import android.app.ProgressDialog;
 import android.content.SharedPreferences;
+import android.graphics.Color;
+import android.os.Build;
 import android.preference.PreferenceManager;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.bumptech.glide.Glide;
 import com.coolweather.android.gson.Weather;
 import com.coolweather.android.gson.Weather2;
 import com.coolweather.android.util.HttpUtil;
@@ -38,11 +43,17 @@ public class WeatherActivity extends AppCompatActivity {
     private TextView nowDegree;
     private TextView nowDescribe;
     private ProgressDialog progressDialog;
+    private ImageView bingImg;
     private static final String TAG = "WeatherActivity";
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_weather);
+
+        android.support.v7.app.ActionBar actionBar = getSupportActionBar();
+        if(actionBar != null)
+            actionBar.hide();
+
         scrollView = findViewById(R.id.weatherLayout);
         //scrollView.setVisibility(View.INVISIBLE);
         forecastLayout = findViewById(R.id.forecastLayout);
@@ -52,9 +63,20 @@ public class WeatherActivity extends AppCompatActivity {
         nowDegree = findViewById(R.id.degree);
         nowDescribe = findViewById(R.id.weatherInfo);
 
-        String weatherId = getIntent().getStringExtra("weatherId");
-
+        bingImg = findViewById(R.id.bingPic);
+        if(Build.VERSION.SDK_INT >= 21){
+            View decorView = getWindow().getDecorView();
+            decorView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+            getWindow().setStatusBarColor(Color.TRANSPARENT);
+        }
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        String bingUrl = prefs.getString("bingPic",null);
+        if(bingUrl != null){
+            Glide.with(this).load(bingUrl).into(bingImg);
+        }else{
+            loadBingPic();
+        }
+
         String nowJson = prefs.getString("now",null);
         String forecastJson = prefs.getString("forecast",null);
         Gson gson = new Gson();
@@ -64,7 +86,17 @@ public class WeatherActivity extends AppCompatActivity {
             Weather2 forecast = Utility.handleForeCastWeatherRequest(forecastJson);
             showForecastWeather(forecast);
         }else{
-            showProgressDialog();
+            String weatherId = getIntent().getStringExtra("weatherId");
+            /**
+             * 两个线程，不知道何时调用closeProgressDialog();
+             * 因为这两个线程是异步的没办法确定哪个线程先结束，不确定到底在哪个线程的onResponse里写closeProgressDialog();
+             *
+             * 想到的解决办法就是
+             *  1. 干脆同步访问网络算了，线性顺序。
+             *  2. 其他方法呢？？
+             */
+
+            //showProgressDialog();
             if(nowJson == null){
                 requesWeather(weatherId,"now");
 
@@ -72,10 +104,34 @@ public class WeatherActivity extends AppCompatActivity {
             if(forecastJson == null){
                 requesWeather(weatherId,"forecast");
             }
-            closeProgressDialog();
+            loadBingPic();
         }
     }
+    private void loadBingPic(){
+        String url = "http://guolin.tech/api/bing_pic";
+        HttpUtil.sendOkhttpRequest(url, new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                e.printStackTrace();
+            }
 
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                final String bingUrl = response.body().string();
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Glide.with(WeatherActivity.this).load(bingUrl).into(bingImg);
+                    }
+                });
+
+                SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(WeatherActivity.this)
+                        .edit();
+                editor.putString("bingPic",bingUrl);
+                editor.apply();
+            }
+        });
+    }
     private void requesWeather(String weatherId , String type){
         String srcNow = "https://free-api.heweather.com/s6/weather/now?";
         String srcForecast = "https://free-api.heweather.com/s6/weather/forecast?";

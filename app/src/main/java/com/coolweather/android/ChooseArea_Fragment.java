@@ -91,6 +91,7 @@ public class ChooseArea_Fragment extends Fragment {
                         County county = LitePal.where("name=?",dataList.get(position)).find(County.class).get(0);
                         intent.putExtra("weatherId",county.getWeatherId());
                         startActivity(intent);
+                        getActivity().finish();
                         break;
 
                 }

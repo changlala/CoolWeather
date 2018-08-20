@@ -6,16 +6,20 @@
     android:layout_height="match_parent"
     android:background="@color/colorPrimary"
     tools:context=".WeatherActivity">
-
+    <ImageView
+        android:id="@+id/bingPic"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"/>
     <ScrollView
         android:id="@+id/weatherLayout"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
         <LinearLayout
-            android:id="@+id/forecastLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:fitsSystemWindows="true">
             <include layout="@layout/title"/>
             <include layout="@layout/now"/>
             <include layout="@layout/forecast"/>
