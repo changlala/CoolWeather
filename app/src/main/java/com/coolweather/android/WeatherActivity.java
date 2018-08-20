@@ -4,13 +4,19 @@ import android.app.ActionBar;
 import android.app.ProgressDialog;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.preference.PreferenceManager;
+import android.support.annotation.Nullable;
+import android.support.v4.view.GravityCompat;
+import android.support.v4.widget.DrawerLayout;
+import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -18,6 +24,10 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.DataSource;
+import com.bumptech.glide.load.engine.GlideException;
+import com.bumptech.glide.request.RequestListener;
+import com.bumptech.glide.request.target.Target;
 import com.coolweather.android.gson.Weather;
 import com.coolweather.android.gson.Weather2;
 import com.coolweather.android.util.HttpUtil;
@@ -28,6 +38,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.zip.Inflater;
 
 import okhttp3.Call;
@@ -44,6 +55,13 @@ public class WeatherActivity extends AppCompatActivity {
     private TextView nowDescribe;
     private ProgressDialog progressDialog;
     private ImageView bingImg;
+    private CountDownLatch countDownLatch;
+    public SwipeRefreshLayout swipeRefreshLayout;
+    public DrawerLayout drawerLayout;
+    private Button navButton;
+
+    public String weatherId;
+
     private static final String TAG = "WeatherActivity";
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,6 +71,17 @@ public class WeatherActivity extends AppCompatActivity {
         android.support.v7.app.ActionBar actionBar = getSupportActionBar();
         if(actionBar != null)
             actionBar.hide();
+        drawerLayout = findViewById(R.id.drawerLayout);
+        navButton = findViewById(R.id.navButton);
+        navButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                drawerLayout.openDrawer(GravityCompat.START);
+            }
+        });
+
+        swipeRefreshLayout = findViewById(R.id.swipe_refresh);
+        swipeRefreshLayout.setColorSchemeColors(getResources().getColor(R.color.colorPrimary));
 
         scrollView = findViewById(R.id.weatherLayout);
         //scrollView.setVisibility(View.INVISIBLE);
@@ -63,6 +92,7 @@ public class WeatherActivity extends AppCompatActivity {
         nowDegree = findViewById(R.id.degree);
         nowDescribe = findViewById(R.id.weatherInfo);
 
+        countDownLatch = new CountDownLatch(3);
         bingImg = findViewById(R.id.bingPic);
         if(Build.VERSION.SDK_INT >= 21){
             View decorView = getWindow().getDecorView();
@@ -85,8 +115,9 @@ public class WeatherActivity extends AppCompatActivity {
             showNowWeather(now);
             Weather2 forecast = Utility.handleForeCastWeatherRequest(forecastJson);
             showForecastWeather(forecast);
+            weatherId = now.getBasic().getCid();
         }else{
-            String weatherId = getIntent().getStringExtra("weatherId");
+            weatherId = getIntent().getStringExtra("weatherId");
             /**
              * 两个线程，不知道何时调用closeProgressDialog();
              * 因为这两个线程是异步的没办法确定哪个线程先结束，不确定到底在哪个线程的onResponse里写closeProgressDialog();
@@ -95,28 +126,62 @@ public class WeatherActivity extends AppCompatActivity {
              *  1. 干脆同步访问网络算了，线性顺序。
              *  2. 其他方法呢？？
              */
-
-            //showProgressDialog();
-            if(nowJson == null){
-                requesWeather(weatherId,"now");
-
+            scrollView.setVisibility(View.INVISIBLE);
+            Log.d(TAG, "onCreate: now is invisible");
+            showProgressDialog();
+            requesWeather(weatherId,"now");
+            requesWeather(weatherId,"forecast");
+            try{
+                countDownLatch.await();
+                closeProgressDialog();
+                Log.d(TAG, "onCreate: now progressdialog is off");
+                scrollView.setVisibility(View.VISIBLE);
+                Log.d(TAG, "onCreate: now is visible");
+            }catch (InterruptedException e){
+                e.printStackTrace();
             }
-            if(forecastJson == null){
-                requesWeather(weatherId,"forecast");
+        }
+        swipeRefreshLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
+            @Override
+            public void onRefresh() {
+                refreshPage();
             }
-            loadBingPic();
+        });
+
+
+    }
+    public void refreshPage(){
+        requesWeather(weatherId,"now");
+        requesWeather(weatherId,"forecast");
+        loadBingPic();
+        if(countDownLatch == null){
+            countDownLatch = new CountDownLatch(3);
+        }
+        try{
+            countDownLatch.await();
+            swipeRefreshLayout.setRefreshing(false);
+        }catch (InterruptedException e){
+            e.printStackTrace();
         }
     }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+    }
+
     private void loadBingPic(){
         String url = "http://guolin.tech/api/bing_pic";
         HttpUtil.sendOkhttpRequest(url, new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
                 e.printStackTrace();
+                countDownLatch.countDown();
             }
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
+
                 final String bingUrl = response.body().string();
                 runOnUiThread(new Runnable() {
                     @Override
@@ -129,8 +194,10 @@ public class WeatherActivity extends AppCompatActivity {
                         .edit();
                 editor.putString("bingPic",bingUrl);
                 editor.apply();
+                countDownLatch.countDown();
             }
         });
+
     }
     private void requesWeather(String weatherId , String type){
         String srcNow = "https://free-api.heweather.com/s6/weather/now?";
@@ -144,6 +211,7 @@ public class WeatherActivity extends AppCompatActivity {
                     @Override
                     public void onFailure(Call call, IOException e) {
                         Toast.makeText(WeatherActivity.this,"实况天气获取失败",Toast.LENGTH_SHORT).show();
+                        countDownLatch.countDown();
                     }
 
                     @Override
@@ -167,6 +235,8 @@ public class WeatherActivity extends AppCompatActivity {
                         }else{
                             Toast.makeText(WeatherActivity.this,"now josn is null",Toast.LENGTH_SHORT).show();
                         }
+                        countDownLatch.countDown();
+                        Log.d(TAG, "onResponse: now wether is done");
                     }
                 });
                 break;
@@ -176,6 +246,7 @@ public class WeatherActivity extends AppCompatActivity {
                     @Override
                     public void onFailure(Call call, IOException e) {
                         Toast.makeText(WeatherActivity.this,"预报天气获取失败",Toast.LENGTH_SHORT).show();
+                        countDownLatch.countDown();
                     }
 
                     @Override
@@ -199,6 +270,8 @@ public class WeatherActivity extends AppCompatActivity {
                         }else{
                             Toast.makeText(WeatherActivity.this,"forecast josn is null",Toast.LENGTH_SHORT).show();
                         }
+                        countDownLatch.countDown();
+                        Log.d(TAG, "onResponse: forecast weather is done");
                     }
                 });
         }
@@ -277,8 +350,9 @@ public class WeatherActivity extends AppCompatActivity {
 
     private void showProgressDialog(){
         if(progressDialog == null){
-            progressDialog = new ProgressDialog(this);
+            progressDialog = new ProgressDialog(WeatherActivity.this);
             progressDialog.setMessage("正在加载。。。");
+
             progressDialog.setCancelable(false);
         }
         progressDialog.show();

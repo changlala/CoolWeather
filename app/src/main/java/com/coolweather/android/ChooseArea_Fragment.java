@@ -87,11 +87,19 @@ public class ChooseArea_Fragment extends Fragment {
                         showCounties();
                         break;
                     case COUNTY:
-                        Intent intent = new Intent(getContext(),WeatherActivity.class);
                         County county = LitePal.where("name=?",dataList.get(position)).find(County.class).get(0);
-                        intent.putExtra("weatherId",county.getWeatherId());
-                        startActivity(intent);
-                        getActivity().finish();
+                        if(getActivity() instanceof MainActivity){
+                            Intent intent = new Intent(getActivity(),WeatherActivity.class);
+                            intent.putExtra("weatherId",county.getWeatherId());
+                            startActivity(intent);
+                            getActivity().finish();
+                        }else if(getActivity() instanceof WeatherActivity){
+                            WeatherActivity activity = (WeatherActivity) getActivity();
+                            activity.drawerLayout.closeDrawers();
+                            activity.swipeRefreshLayout.setRefreshing(true);
+                            activity.weatherId = county.getWeatherId();
+                            activity.refreshPage();
+                        }
                         break;
 
                 }
