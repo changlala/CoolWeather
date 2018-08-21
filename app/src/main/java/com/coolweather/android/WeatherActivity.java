@@ -2,6 +2,7 @@ package com.coolweather.android;
 
 import android.app.ActionBar;
 import android.app.ProgressDialog;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
@@ -104,7 +105,7 @@ public class WeatherActivity extends AppCompatActivity {
         if(bingUrl != null){
             Glide.with(this).load(bingUrl).into(bingImg);
         }else{
-            loadBingPic();
+            loadBingPic(countDownLatch);
         }
 
         String nowJson = prefs.getString("now",null);
@@ -126,17 +127,20 @@ public class WeatherActivity extends AppCompatActivity {
              *  1. 干脆同步访问网络算了，线性顺序。
              *  2. 其他方法呢？？
              */
-            scrollView.setVisibility(View.INVISIBLE);
+            scrollView.setVisibility(View.INVISIBLE);//好像没起作用啊
             Log.d(TAG, "onCreate: now is invisible");
             showProgressDialog();
-            requesWeather(weatherId,"now");
-            requesWeather(weatherId,"forecast");
+            requesWeather(countDownLatch,weatherId,"now");
+            requesWeather(countDownLatch,weatherId,"forecast");
             try{
                 countDownLatch.await();
                 closeProgressDialog();
                 Log.d(TAG, "onCreate: now progressdialog is off");
                 scrollView.setVisibility(View.VISIBLE);
                 Log.d(TAG, "onCreate: now is visible");
+
+                Intent intent = new Intent(this,AutoUpdateService.class);//启动服务写在onCreate里好么
+                startService(intent);
             }catch (InterruptedException e){
                 e.printStackTrace();
             }
@@ -151,12 +155,13 @@ public class WeatherActivity extends AppCompatActivity {
 
     }
     public void refreshPage(){
-        requesWeather(weatherId,"now");
-        requesWeather(weatherId,"forecast");
-        loadBingPic();
         if(countDownLatch == null){
             countDownLatch = new CountDownLatch(3);
         }
+        requesWeather(countDownLatch,weatherId,"now");
+        requesWeather(countDownLatch,weatherId,"forecast");
+        loadBingPic(countDownLatch);
+
         try{
             countDownLatch.await();
             swipeRefreshLayout.setRefreshing(false);
@@ -170,12 +175,13 @@ public class WeatherActivity extends AppCompatActivity {
         super.onResume();
     }
 
-    private void loadBingPic(){
+    private void loadBingPic(final CountDownLatch countDownLatch){
         String url = "http://guolin.tech/api/bing_pic";
         HttpUtil.sendOkhttpRequest(url, new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
                 e.printStackTrace();
+
                 countDownLatch.countDown();
             }
 
@@ -199,7 +205,7 @@ public class WeatherActivity extends AppCompatActivity {
         });
 
     }
-    private void requesWeather(String weatherId , String type){
+    private void requesWeather(final CountDownLatch countDownLatch,String weatherId , String type){
         String srcNow = "https://free-api.heweather.com/s6/weather/now?";
         String srcForecast = "https://free-api.heweather.com/s6/weather/forecast?";
         String param="location="+weatherId+"&key=11bc161e04104be693fd733bc06332ae";
@@ -210,7 +216,13 @@ public class WeatherActivity extends AppCompatActivity {
                 HttpUtil.sendOkhttpRequest(url, new Callback() {
                     @Override
                     public void onFailure(Call call, IOException e) {
-                        Toast.makeText(WeatherActivity.this,"实况天气获取失败",Toast.LENGTH_SHORT).show();
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                Toast.makeText(WeatherActivity.this,"实况天气获取失败",Toast.LENGTH_SHORT).show();
+                            }
+                        });
+
                         countDownLatch.countDown();
                     }
 
@@ -245,7 +257,13 @@ public class WeatherActivity extends AppCompatActivity {
                 HttpUtil.sendOkhttpRequest(urll, new Callback() {
                     @Override
                     public void onFailure(Call call, IOException e) {
-                        Toast.makeText(WeatherActivity.this,"预报天气获取失败",Toast.LENGTH_SHORT).show();
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                Toast.makeText(WeatherActivity.this,"实况天气获取失败",Toast.LENGTH_SHORT).show();
+                            }
+                        });
+
                         countDownLatch.countDown();
                     }
 
@@ -277,14 +295,14 @@ public class WeatherActivity extends AppCompatActivity {
         }
         /**
         try{
-            /**
-             * 这里起初是把这个url给encode结果错误提示
-             *  Caused by: java.lang.IllegalArgumentException: Expected URL scheme 'http' or 'https' but no colon was found
-             *  后尝试值encodeparam字段 ,结果 返回的json 的status 提示invalid param？？？？？
-             *  最后一点也不encode了，成功
-             *  ？？？
-             *  ？？？？？？、、
-             *
+         /**
+         * 这里起初是把这个url给encode结果错误提示
+         *  Caused by: java.lang.IllegalArgumentException: Expected URL scheme 'http' or 'https' but no colon was found
+         *  后尝试值encodeparam字段 ,结果 返回的json 的status 提示invalid param？？？？？
+         *  最后一点也不encode了，成功
+         *  ？？？
+         *  ？？？？？？、、
+         *
             //param = URLEncoder.encode(param,"GBK");
             HttpUtil.sendOkhttpRequest(src+param, new Callback() {
                 @Override
@@ -322,7 +340,7 @@ public class WeatherActivity extends AppCompatActivity {
 
     private void showNowWeather(Weather now){
         titleCity.setText(now.getBasic().getcName());
-        titleUpdate.setText(now.getUpdate().getLoc().split(" ")[1]);
+        titleUpdate.setText("更新时间:"+now.getUpdate().getLoc().split(" ")[1]);
         nowDescribe.setText(now.getNow().getDescribe());
         nowDegree.setText(now.getNow().getTmp());
     }
